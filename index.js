@@ -17,7 +17,6 @@ async function run() {
     try {
         const userCollection = client.db('tic-tac-toe').collection('user')
         const gamesCollection = client.db('tic-tac-toe').collection('games')
-        const movesCollection = client.db('tic-tac-toe').collection('moves')
         app.get('/user', async (req, res) => {
             const query = {}
             const result = await userCollection.find(query).toArray()
@@ -28,15 +27,44 @@ async function run() {
             const result = await userCollection.insertOne(userData)
             res.send(result)
         })
+
         app.post('/games', async (req, res) => {
             const game = req.body
-            const result = await gamesCollection.insertOne(game)
-            res.send(result)
+            const p2Query = await userCollection.findOne({ email: game.p2 })
+            if (p2Query) {
+                const p2Name = p2Query.displayName
+                const insertGame = { ...game, p2Name }
+                console.log(insertGame)
+                const result = await gamesCollection.insertOne(insertGame)
+                res.status(200).send(result)
+            }
+            res.status(403).send({ message: 'Forbidden' })
         })
         app.get('/games', async (req, res) => {
             const email = req.query.email
-            const query = { p1: email }
-            const result = await gamesCollection.find(query).toArray()
+            if (email) {
+                const query1 = { p1: email }
+                const query2 = { p2: email }
+                const result1 = await gamesCollection.find(query1).toArray();
+                const result2 = await gamesCollection.find(query2).toArray();
+                const result = [...result1, ...result2]
+                console.log(result)
+                
+                res.send(result)
+            } else {
+                const result = await gamesCollection.find({}).toArray()
+                res.send(result)
+            }
+        })
+        app.put('/games', async (req, res) => {
+            const moved = req.body
+            const {player, board, lastMove} = moved
+            const filter = { _id: ObjectId(moved._id)}
+            const options = { upsert: true }
+            const updatedDoc = {
+                $set: { [board] : player, lastMove }
+            }
+            const result = await gamesCollection.updateOne(filter, updatedDoc, options)
             res.send(result)
         })
         app.get('/games/board/:id', async (req, res) => {
